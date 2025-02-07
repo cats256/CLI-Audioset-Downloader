@@ -140,7 +140,7 @@ if __name__ == "__main__":
     lines = [line.split(',') for line in lines]
 
     mids = [line[1] for line in lines]
-    labels = [line[2] for line in lines]
+    labels = [line[2][1:-2] for line in lines]
 
     mid_label_dict = dict(zip(labels, mids))
 
