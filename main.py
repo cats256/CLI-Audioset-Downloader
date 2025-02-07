@@ -15,6 +15,7 @@ import yt_dlp
 # Add other kwargs support for yt-dlp
 # Add requirements.txt
 # Turn this into a package
+# Add replicate class labels
 
 @dataclass
 class Segment:
@@ -73,8 +74,9 @@ def download_audioset(segment: Segment, split: str) -> None:
             'nopostoverwrites': True
         }],
         'postprocessor_args': ['-ar', str(sample_rate)],
-        'download_ranges': yt_dlp.utils.download_range_func([], [[segment.start_seconds, segment.end_seconds]]),
-        'outtmpl': f"{outpath}/{segment.ytid}"
+        'download_ranges': yt_dlp.utils.download_range_func(None, [(segment.start_seconds, segment.end_seconds)]),
+        'outtmpl': f"{outpath}/{segment.ytid}",
+        'force_keyframes_at_cuts': True,
     }
 
     try:
@@ -97,13 +99,12 @@ def download_audioset_split(split: str, allowed_labels: Optional[List[str]] = No
                 logger.error(f"Malformed line {i}: {line}")
                 continue
             
-            ytid, start_seconds, end_seconds, positive_labels = parts
             segments.append(
                 Segment(
-                    ytid=ytid.strip(),
-                    start_seconds=float(start_seconds),
-                    end_seconds=float(end_seconds),
-                    positive_labels=positive_labels.strip().strip('"').split(",")
+                    ytid=parts[0].strip(),
+                    start_seconds=float(parts[1]),
+                    end_seconds=float(parts[2]),
+                    positive_labels=parts[3].strip().strip('"').split(",")
                 )
             )
     
