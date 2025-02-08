@@ -128,7 +128,8 @@ def download_audioset_split(split: str, allowed_labels: Optional[List[str]] = No
 if __name__ == "__main__":
     with open('csv_files/class_labels_indices.csv') as file:
         next(file)
-        mid_label_dict = {line.split(',')[2].strip().strip('"'): line.split(',')[1] for line in file}
+        rows = [line.strip().split(',', 2) for line in file]
+        mid_label_dict = {row[2].strip().strip('"'): row[1] for row in rows}
 
     parser = get_parser()
     args = parser.parse_args()
