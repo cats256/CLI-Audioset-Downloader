@@ -11,7 +11,7 @@ import tqdm
 import yt_dlp
 
 # TODO:
-# Make num logical cpu, sample_rate, and codec a CLI option
+# Make num logical cpu, sample_rate, force mono audio, and codec type a CLI option
 # Add other kwargs support for yt-dlp
 # Add requirements.txt
 # Turn this into a package
@@ -73,7 +73,7 @@ def download_audioset(segment: Segment, split: str) -> None:
             'preferredcodec': codec,
             'nopostoverwrites': True
         }],
-        'postprocessor_args': ['-ar', str(sample_rate)],
+        'postprocessor_args': ['-ar', str(sample_rate), '-ac', '1'],
         'download_ranges': yt_dlp.utils.download_range_func(None, [(segment.start_seconds, segment.end_seconds)]),
         'outtmpl': f"{outpath}/{segment.ytid}",
         'force_keyframes_at_cuts': True,
