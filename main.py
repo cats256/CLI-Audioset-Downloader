@@ -4,7 +4,8 @@ import os
 from dataclasses import dataclass
 from functools import partial
 from multiprocessing import get_context
-from typing import List, Optional
+from typing import List, Optional, Set
+from pathvalidate import sanitize_filename
 
 import psutil
 import tqdm
@@ -15,7 +16,6 @@ import yt_dlp
 # Add other kwargs support for yt-dlp
 # Add requirements.txt
 # Turn this into a package
-# Add replicate class labels
 
 @dataclass
 class Segment:
@@ -35,6 +35,11 @@ if not os.path.exists(log_file):
 logging.basicConfig(filename=log_file, level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+with open('csv_files/class_labels_indices.csv') as file:
+    next(file)
+    rows = [line.strip().split(',', 2) for line in file]
+    mid_label_dict = {row[2].strip().strip('"'): row[1] for row in rows}
+
 def get_parser():
     parser = argparse.ArgumentParser(description="Get dataset splits from command line.")
     parser.add_argument(
@@ -52,14 +57,21 @@ def get_parser():
     )
     return parser
 
-def download_audioset(segment: Segment, split: str) -> None:
-    outpath = os.path.join(f'{codec}_files', split)
-    output_file = os.path.join(outpath, f"{segment.ytid}.{codec}")
+def download_audioset(segment: Segment, outpath, mid_label_dict) -> None:
+    output_file = os.path.join(outpath, "unorganized", f"{segment.ytid}.{codec}")
 
     if os.path.isfile(output_file):
+        for mid in segment.positive_labels:
+            label_dir = os.path.join(outpath, "organized", sanitize_filename(mid_label_dict[mid], replacement_text="_"))
+            os.makedirs(label_dir, exist_ok=True)
+
+            hard_link_path = os.path.join(label_dir, f"{segment.ytid}.{codec}")
+
+            if not os.path.exists(hard_link_path):
+                os.link(output_file, hard_link_path)            
         return None
     
-    os.makedirs(outpath, exist_ok=True)
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     url = f'https://www.youtube.com/watch?v={segment.ytid}'
     ydl_opts = {
@@ -75,7 +87,7 @@ def download_audioset(segment: Segment, split: str) -> None:
         }],
         'postprocessor_args': ['-ar', str(sample_rate), '-ac', '1'],
         'download_ranges': yt_dlp.utils.download_range_func(None, [(segment.start_seconds, segment.end_seconds)]),
-        'outtmpl': f"{outpath}/{segment.ytid}",
+        'outtmpl': os.path.splitext(output_file)[0],
         'force_keyframes_at_cuts': True,
     }
 
@@ -85,9 +97,19 @@ def download_audioset(segment: Segment, split: str) -> None:
     except Exception as e:
         logger.error(f"Failed to download {url}: {e}")
 
-def download_audioset_split(split: str, allowed_labels: Optional[List[str]] = None):
+    for mid in segment.positive_labels:
+        label_dir = os.path.join(outpath, "organized", mid_label_dict[mid])
+        os.makedirs(label_dir, exist_ok=True)
+        
+        hard_link_path = os.path.join(label_dir, f"{segment.ytid}.{codec}")
+
+        if not os.path.exists(hard_link_path):
+            os.link(output_file, hard_link_path)
+
+def download_audioset_split(split: str, allowed_labels: Optional[Set[str]] = None) -> None:
     print(f'Downloading {split}')
-    os.makedirs(os.path.join(f'{codec}_files', split), exist_ok=True)
+    outpath = os.path.join(f'{codec}_files', split)
+    os.makedirs(outpath, exist_ok=True)
 
     with open(f'csv_files/{split}_segments.csv', 'r', newline='') as file:
         lines = file.readlines()[3:-1]
@@ -109,15 +131,13 @@ def download_audioset_split(split: str, allowed_labels: Optional[List[str]] = No
             )
     
     if allowed_labels:
-        allowed_labels = set(allowed_labels)
-
         def label_filter(segment):
             return any(label in allowed_labels for label in segment.positive_labels)
 
         segments = [seg for seg in segments if label_filter(seg)]
 
     with get_context("spawn").Pool(num_logical_cpus * 2) as pool:
-        download_audio_split = partial(download_audioset, split=split)
+        download_audio_split = partial(download_audioset, outpath=outpath)
 
         for _ in tqdm.tqdm(pool.imap_unordered(download_audio_split, segments), total=len(segments), leave=False):
             pass
@@ -126,11 +146,6 @@ def download_audioset_split(split: str, allowed_labels: Optional[List[str]] = No
     print()
 
 if __name__ == "__main__":
-    with open('csv_files/class_labels_indices.csv') as file:
-        next(file)
-        rows = [line.strip().split(',', 2) for line in file]
-        mid_label_dict = {row[2].strip().strip('"'): row[1] for row in rows}
-
     parser = get_parser()
     args = parser.parse_args()
     splits, allowed_labels = args.splits, args.labels
@@ -140,7 +155,7 @@ if __name__ == "__main__":
     print()
 
     if allowed_labels:
-        allowed_labels = [mid_label_dict[label] for label in allowed_labels]
+        allowed_labels = set([mid_label_dict[label] for label in allowed_labels])
 
     for split in splits:
         download_audioset_split(split, allowed_labels)
