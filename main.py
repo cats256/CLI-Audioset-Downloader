@@ -38,7 +38,8 @@ logger = logging.getLogger(__name__)
 with open('csv_files/class_labels_indices.csv') as file:
     next(file)
     rows = [line.strip().split(',', 2) for line in file]
-    mid_label_dict = {row[2].strip().strip('"'): row[1] for row in rows}
+    label_mid_dict = {row[2].strip().strip('"'): row[1] for row in rows}
+    mid_label_dict = {row[1]: row[2].strip().strip('"') for row in rows}
 
 def get_parser():
     parser = argparse.ArgumentParser(description="Get dataset splits from command line.")
@@ -57,7 +58,7 @@ def get_parser():
     )
     return parser
 
-def download_audioset(segment: Segment, outpath, mid_label_dict) -> None:
+def download_audioset(segment: Segment, outpath) -> None:
     output_file = os.path.join(outpath, "unorganized", f"{segment.ytid}.{codec}")
 
     if os.path.isfile(output_file):
@@ -94,17 +95,17 @@ def download_audioset(segment: Segment, outpath, mid_label_dict) -> None:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
+
+        for mid in segment.positive_labels:
+            label_dir = os.path.join(outpath, "organized", mid_label_dict[mid])
+            os.makedirs(label_dir, exist_ok=True)
+            
+            hard_link_path = os.path.join(label_dir, f"{segment.ytid}.{codec}")
+
+            if not os.path.exists(hard_link_path):
+                os.link(output_file, hard_link_path)
     except Exception as e:
         logger.error(f"Failed to download {url}: {e}")
-
-    for mid in segment.positive_labels:
-        label_dir = os.path.join(outpath, "organized", mid_label_dict[mid])
-        os.makedirs(label_dir, exist_ok=True)
-        
-        hard_link_path = os.path.join(label_dir, f"{segment.ytid}.{codec}")
-
-        if not os.path.exists(hard_link_path):
-            os.link(output_file, hard_link_path)
 
 def download_audioset_split(split: str, allowed_labels: Optional[Set[str]] = None) -> None:
     print(f'Downloading {split}')
@@ -155,7 +156,7 @@ if __name__ == "__main__":
     print()
 
     if allowed_labels:
-        allowed_labels = set([mid_label_dict[label] for label in allowed_labels])
+        allowed_labels = set([label_mid_dict[label] for label in allowed_labels])
 
     for split in splits:
         download_audioset_split(split, allowed_labels)
