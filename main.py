@@ -65,7 +65,7 @@ def get_parser():
         help="List of labels to filter by. If not provided, downloads everything."
     )
     parser.add_argument(
-        "--labeled-files",
+        "--label-files",
         action="store_true",
         help="If set, organizes downloaded files into labeled directories."
     )
@@ -79,11 +79,12 @@ def get_parser():
 
 def create_labeled_files(segment, mid_label_dict, outpath, output_file, codec, sanitize_label_name):
     for mid in segment.positive_labels:
+        label_name = mid_label_dict.get(mid, "unknown_label")
+
         if sanitize_label_name:
             label_name = re.sub(r'[^a-zA-Z\s]', '', label_name)
             label_name = label_name.lower().replace(" ", "_")
 
-        label_name = mid_label_dict.get(mid, "unknown_label")
         label_dir = os.path.join(outpath, "organized", sanitize_filename(
             label_name, replacement_text="_"))
         os.makedirs(label_dir, exist_ok=True)
@@ -94,14 +95,14 @@ def create_labeled_files(segment, mid_label_dict, outpath, output_file, codec, s
             shutil.copy2(output_file, copy_path)
 
 
-def download_audioset(segment: Segment, outpath, label_files: Optional[bool] = False) -> None:
+def download_audioset(segment: Segment, outpath, label_files: Optional[bool] = False, sanitize_label_name: Optional[bool] = True) -> None:
     output_file = os.path.join(
         outpath, "unorganized", f"{segment.ytid}.{codec}")
 
     if os.path.isfile(output_file):
         if label_files:
             create_labeled_files(segment, mid_label_dict,
-                                 outpath, output_file, codec)
+                                 outpath, output_file, codec, sanitize_label_name)
         return
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
