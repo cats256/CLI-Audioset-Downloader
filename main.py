@@ -92,7 +92,11 @@ def create_labeled_files(segment, mid_label_dict, outpath, output_file, codec, s
         copy_path = os.path.join(label_dir, f"{segment.ytid}.{codec}")
 
         if not os.path.exists(copy_path):
-            shutil.copy2(output_file, copy_path)
+            # shutil.copy2(output_file, copy_path)
+            try:
+                os.link(output_file, copy_path)
+            except OSError as e:
+                print(f"Failed to create {output_file} to {copy_path}: {e}")
 
 
 def download_audioset(segment: Segment, outpath, label_files: Optional[bool] = False, sanitize_label_name: Optional[bool] = True) -> None:
